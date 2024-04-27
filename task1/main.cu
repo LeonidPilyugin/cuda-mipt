@@ -4,8 +4,8 @@
 #define THREAD_N 100
 #define BLOCK_SIZE 1024
 #define BLOCKS 4
-#define THREADS (BLOCKS * BLOCK_SIZE)
-#define INTERVAL (1.f / THREADS)
+#define THREADS ((BLOCKS) * (BLOCK_SIZE))
+#define INTERVAL (1.f / (THREADS))
 
 __global__ void g_compute_values(float2 *data) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
