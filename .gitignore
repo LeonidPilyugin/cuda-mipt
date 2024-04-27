@@ -8,3 +8,4 @@ task1
 task2
 *.matrix
 *.log
+*.swp*
