@@ -4,8 +4,6 @@
 *.ptx
 *.cubin
 *.fatbin
-task1
-task2
 *.matrix
 *.log
 *.swp*
