@@ -14,6 +14,28 @@
 texture<int, 1, cudaReadModeElementType> tex0;
 texture<int, 1, cudaReadModeElementType> tex1;
 
+__global__ void g_make_step_slow(int *in, int *out, int3 size) {
+    int x = threadIdx.x + blockIdx.x * blockDim.x;
+    int y = threadIdx.y + blockIdx.y * blockDim.y;
+    int z = threadIdx.z + blockIdx.z * blockDim.z;
+
+    // get cell value
+    int f = in[INDEX(make_int3(x, y, z), size)];
+
+    // get sum of neighbour cell values
+    int sigma = 0;
+    for (int i = -1; i <= 1; i++)
+        for (int j = -1; j <= 1; j++)
+            for (int k = -1; k <= 1; k++)
+                sigma += in[INDEX(make_int3(PBC(x + i, size.x), PBC(y + j, size.y), PBC(z + k, size.z)), size)];
+
+    sigma -= f;
+
+    // set new cell value
+    out[INDEX(make_int3(x, y, z), size)] = ((sigma / (2 * f + 2) - (3 - 2 * f)) == 0);
+
+}
+
 __global__ void g_make_step(int *out, int3 size, int offset) {
     int x = threadIdx.x + blockIdx.x * blockDim.x;
     int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -96,7 +118,37 @@ void dump_file(Array array, InputArgs args) {
     fprintf(args.output, "0 0 0 0\n");
 }
 
-float simulate(Array array, InputArgs args) {
+
+
+void simulate_slow(Array array, InputArgs args) {
+    size_t array_size = array.size.x * array.size.y * array.size.z;
+
+    // allocate gpu memory
+    int *d_arrays[2];
+    cudaMalloc((void**) &(d_arrays[0]), array_size * sizeof(int));
+    cudaMalloc((void**) &(d_arrays[1]), array_size * sizeof(int));
+
+    cudaMemcpy(d_arrays[0], array.array, array_size * sizeof(int), cudaMemcpyHostToDevice);
+
+    for (int i = 0, offset = 0; i <= args.steps; i++, offset = 1 - offset) {
+        // dump
+        if (i % args.output_every == 0) {
+            cudaMemcpy(array.array, d_arrays[offset], array_size * sizeof(int), cudaMemcpyDeviceToHost);
+            dump_file(array, args);
+        }
+
+        // simulate 1 step
+        g_make_step_slow<<<dim3(array.size.x / BLOCK_SIZE_1D, array.size.y / BLOCK_SIZE_1D, array.size.z / BLOCK_SIZE_1D), BLOCK_SIZE>>>(d_arrays[offset], d_arrays[1 - offset], array.size);
+    }
+
+    // free resources
+    cudaFree(d_arrays[0]);
+    cudaFree(d_arrays[1]);
+
+    fclose(args.output);
+}
+
+void simulate(Array array, InputArgs args) {
     size_t array_size = array.size.x * array.size.y * array.size.z;
 
     // allocate gpu memory
@@ -142,7 +194,13 @@ int main(int argc, char *argv[]) {
     InputArgs args = parse_cli(argc, argv);
     Array input_array = parse_input_file(args);
 
+#ifdef SLOW
+    printf("Slow version\n");
+    simulate_slow(input_array, args);
+#else
+    printf("Fast version\n");
     simulate(input_array, args);
+#endif
 
     free(input_array.array);
 
