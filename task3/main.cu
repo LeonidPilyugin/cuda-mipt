@@ -21,7 +21,6 @@ __global__ void g_make_step(int *out, int3 size, int offset) {
 
     // get cell value
     int f = tex1Dfetch(offset ? tex1 : tex0, INDEX(make_int3(x, y, z), size));
-    /* printf("%d", f); */
 
     // get sum of neighbour cell values
     int sigma = 0;
