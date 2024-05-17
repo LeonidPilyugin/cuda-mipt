@@ -96,7 +96,7 @@ void dump_file(Array array, InputArgs args) {
     fprintf(args.output, "0 0 0 0\n");
 }
 
-void simulate(Array array, InputArgs args) {
+float simulate(Array array, InputArgs args) {
     size_t array_size = array.size.x * array.size.y * array.size.z;
 
     // allocate gpu memory
@@ -109,7 +109,6 @@ void simulate(Array array, InputArgs args) {
     cudaBindTexture(0, tex1, d_arrays[1], array_size * sizeof(int));
 
     cudaMemcpy(d_arrays[0], array.array, array_size * sizeof(int), cudaMemcpyHostToDevice);
-
 
     for (int i = 0, offset = 0; i <= args.steps; i++, offset = 1 - offset) {
         // dump
