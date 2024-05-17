@@ -14,6 +14,32 @@
 texture<int, 1, cudaReadModeElementType> tex0;
 texture<int, 1, cudaReadModeElementType> tex1;
 
+void make_step_cpu(int *in, int *out, int3 size) {
+    for (int x = 0; x < size.x; x++) {
+        for (int y = 0; y < size.y; y++) {
+            for (int z = 0; z < size.z; z++) {
+                // get cell value
+                int f = in[INDEX(make_int3(x, y, z), size)];
+
+                // get sum of neighbour cell values
+                int sigma = 0;
+                for (int i = -1; i <= 1; i++)
+                    for (int j = -1; j <= 1; j++)
+                        for (int k = -1; k <= 1; k++)
+                            sigma += in[INDEX(make_int3(PBC(x + i, size.x), PBC(y + j, size.y), PBC(z + k, size.z)), size)];
+
+                sigma -= f;
+
+                // set new cell value
+                out[INDEX(make_int3(x, y, z), size)] = ((sigma / (2 * f + 2) - (3 - 2 * f)) == 0);
+
+
+            }
+        }
+    }
+}
+
+
 __global__ void g_make_step_slow(int *in, int *out, int3 size) {
     int x = threadIdx.x + blockIdx.x * blockDim.x;
     int y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -118,7 +144,28 @@ void dump_file(Array array, InputArgs args) {
     fprintf(args.output, "0 0 0 0\n");
 }
 
+void simulate_cpu(Array array, InputArgs args) {
+    size_t array_size = array.size.x * array.size.y * array.size.z;
+    
+    int *arrays[2];
+    arrays[0] = (int*) malloc(array_size * sizeof(int));
+    arrays[1] = (int*) malloc(array_size * sizeof(int));
 
+    memcpy(arrays[0], array.array, array_size * sizeof(int));
+    
+    for (int i = 0, offset = 0; i <= args.steps; i++, offset = 1 - offset) {
+        // dump
+        if (i % args.output_every == 0) {
+            memcpy(array.array, arrays[offset], array_size * sizeof(int));
+            dump_file(array, args);
+        }
+
+        // simulate 1 step
+        make_step_cpu(arrays[offset], arrays[1 - offset], array.size);
+    }
+
+
+}
 
 void simulate_slow(Array array, InputArgs args) {
     size_t array_size = array.size.x * array.size.y * array.size.z;
@@ -198,8 +245,13 @@ int main(int argc, char *argv[]) {
     printf("Slow version\n");
     simulate_slow(input_array, args);
 #else
+#ifdef CPU
+    printf("CPU version\n");
+    simulate_cpu(input_array, args);
+#else
     printf("Fast version\n");
     simulate(input_array, args);
+#endif
 #endif
 
     free(input_array.array);
