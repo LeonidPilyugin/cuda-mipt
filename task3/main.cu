@@ -112,17 +112,16 @@ void simulate(Array array, InputArgs args) {
     cudaMemcpy(d_arrays[0], array.array, array_size * sizeof(int), cudaMemcpyHostToDevice);
 
 
-    for (int i = 0, offset = 0; i < args.steps + 1; i++, offset = 1 - offset) {
-        // simulate 1 step
-        g_make_step<<<dim3(array.size.x / BLOCK_SIZE_1D, array.size.y / BLOCK_SIZE_1D, array.size.z / BLOCK_SIZE_1D), BLOCK_SIZE>>>(d_arrays[1 - offset], array.size, offset);
-        
+    for (int i = 0, offset = 0; i <= args.steps; i++, offset = 1 - offset) {
         // dump
         if (i % args.output_every == 0) {
-            cudaMemcpy(array.array, d_arrays[1 - offset], array_size * sizeof(int), cudaMemcpyDeviceToHost);
+            cudaMemcpy(array.array, d_arrays[offset], array_size * sizeof(int), cudaMemcpyDeviceToHost);
             dump_file(array, args);
         }
-    }
 
+        // simulate 1 step
+        g_make_step<<<dim3(array.size.x / BLOCK_SIZE_1D, array.size.y / BLOCK_SIZE_1D, array.size.z / BLOCK_SIZE_1D), BLOCK_SIZE>>>(d_arrays[1 - offset], array.size, offset);
+    }
 
     // free resources
     cudaUnbindTexture(tex0);
